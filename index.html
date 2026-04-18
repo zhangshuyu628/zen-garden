@@ -22,15 +22,18 @@
         });
 
         function ready() {
+            // 1. 初始化容器
             const trailLayer = new Container(768, 1024).addTo();
             let zenScore = 0;
             
-            // 初始坐标
+            // 初始坐标变量
             let posX = 384; 
             let posY = 512;
             let moveX = 0;
             let moveY = 0;
+            let sensorsActive = false; // 标记传感器是否激活
 
+            // 2. 禅石设计
             const stone = new Poly({
                 radius: 60,
                 sides: [6, 8], 
@@ -38,6 +41,7 @@
                 color: new RadialColor(["#999", "#444"], [0, 1])
             }).loc(posX, posY).sha("#000", 8, 8, 15);
 
+            // 3. UI 标签
             const scoreLabel = new Label({
                 text: "ZEN ENERGY: 0",
                 size: 32,
@@ -46,7 +50,8 @@
                 bold: true
             }).pos(50, 50).alp(0.9);
 
-            new Button({
+            // 4. 重置按钮
+            const resetBtn = new Button({
                 label: "CLEAR",
                 width: 140,
                 height: 60,
@@ -58,53 +63,85 @@
                 scoreLabel.text = "ZEN ENERGY: 0";
             });
 
-            // --- 核心修复：双重传感器兼容逻辑 ---
-            window.addEventListener("deviceorientation", (e) => {
-                // 1. 尝试读取 Chrome 模拟器标准的 beta/gamma
-                // 2. 这里的 0.1 是灵敏度系数，可以根据需要调大
+            // --- 5. 核心修复：专门针对 iPhone 14/iPad Pro 的授权按钮 ---
+            const authBtn = new Button({
+                label: "START ZEN",
+                width: 260,
+                height: 100,
+                backgroundColor: "#d2691e",
+                rollBackgroundColor: "#8b4513",
+                cornerRadius: 50,
+                shadowColor: "rgba(0,0,0,0.3)",
+                shadowBlur: 20
+            }).center();
+
+            authBtn.tap(() => {
+                // 显式请求 iOS 传感器权限
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response == 'granted') {
+                                sensorsActive = true;
+                                authBtn.animate({props:{alpha:0}, time:0.5, call:() => { authBtn.removeFrom(); }});
+                                window.addEventListener("deviceorientation", handleOrientation);
+                            } else {
+                                alert("Permission denied. Please refresh and allow access.");
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            // 即使报错也尝试移除按钮并监听，兼容部分安卓
+                            authBtn.removeFrom();
+                            window.addEventListener("deviceorientation", handleOrientation);
+                        });
+                } else {
+                    // 非 iOS 设备直接启动
+                    sensorsActive = true;
+                    authBtn.removeFrom();
+                    window.addEventListener("deviceorientation", handleOrientation);
+                }
+            });
+
+            function handleOrientation(e) {
+                // 针对最新的 Chrome 模拟器和移动端标准
                 if (e.gamma !== null && e.beta !== null) {
-                    moveX = e.gamma * 0.2; 
-                    moveY = e.beta * 0.2;
+                    // 灵敏度调整为 0.3，针对 14 Pro 高频传感器优化
+                    moveX = e.gamma * 0.3; 
+                    moveY = e.beta * 0.3;
                 }
-            });
+            }
 
-            // 如果是在手机上，有时需要点击一下页面才能激活传感器权限
-            S.on("stagemousedown", () => {
-                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission();
-                }
-            });
-
+            // 6. 核心循环 (Ticker)
             Ticker.add(() => {
+                if (!sensorsActive) return; // 没授权前不动
+
                 posX += moveX;
                 posY += moveY;
 
-                // 边界检测
-                if (posX < 60) posX = 60;
-                if (posX > 708) posX = 708;
-                if (posY < 60) posY = 60;
-                if (posY > 964) posY = 964;
+                // 边缘检测
+                if (posX < 60) { posX = 60; moveX = 0; }
+                if (posX > 708) { posX = 708; moveX = 0; }
+                if (posY < 60) { posY = 60; moveY = 0; }
+                if (posY > 964) { posY = 964; moveY = 0; }
 
                 stone.loc(posX, posY);
 
-                // 产生痕迹逻辑
+                // 产生痕迹
                 if (Math.abs(moveX) > 0.5 || Math.abs(moveY) > 0.5) {
                     new Poly({
-                        radius: rand(8, 12),
+                        radius: rand(10, 15),
                         sides: 5,
                         pointSize: 0.3,
                         color: "#d2b48c" 
                     })
                     .loc(posX, posY, trailLayer)
-                    .alp(0.3)
+                    .alp(0.2)
                     .ord(-1);
                     
                     zenScore += 0.05;
                     scoreLabel.text = "ZEN ENERGY: " + Math.floor(zenScore);
                 }
             });
-
-            new Label("Click stage & Tilt to move").center().mov(0, -100).alp(0.6).animate({props:{alpha:0}, time:1.5, wait:2});
         }
     </script>
 </head>
