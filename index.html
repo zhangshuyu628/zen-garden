@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Zen Garden - Kinetic Sand</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0" />
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
+    </style>
+
+    <script type="module">
+        import zim from "https://zimjs.org/cdn/019/zim";
+
+        new Frame({
+            scaling: FIT,
+            width: 768,        
+            height: 1024,
+            color: "#f4e4c1",
+            outerColor: "#000",
+            sensors: true,
+            ready: ready
+        });
+
+        function ready() {
+            const trailLayer = new Container(768, 1024).addTo();
+            let zenScore = 0;
+            
+            // 初始坐标
+            let posX = 384; 
+            let posY = 512;
+            let moveX = 0;
+            let moveY = 0;
+
+            const stone = new Poly({
+                radius: 60,
+                sides: [6, 8], 
+                pointSize: 0.6,
+                color: new RadialColor(["#999", "#444"], [0, 1])
+            }).loc(posX, posY).sha("#000", 8, 8, 15);
+
+            const scoreLabel = new Label({
+                text: "ZEN ENERGY: 0",
+                size: 32,
+                color: "#5d4037",
+                font: "verdana",
+                bold: true
+            }).pos(50, 50).alp(0.9);
+
+            new Button({
+                label: "CLEAR",
+                width: 140,
+                height: 60,
+                backgroundColor: "#8b4513",
+                cornerRadius: 30
+            }).pos(50, 140).tap(() => {
+                trailLayer.removeAllChildren();
+                zenScore = 0;
+                scoreLabel.text = "ZEN ENERGY: 0";
+            });
+
+            // --- 核心修复：双重传感器兼容逻辑 ---
+            window.addEventListener("deviceorientation", (e) => {
+                // 1. 尝试读取 Chrome 模拟器标准的 beta/gamma
+                // 2. 这里的 0.1 是灵敏度系数，可以根据需要调大
+                if (e.gamma !== null && e.beta !== null) {
+                    moveX = e.gamma * 0.2; 
+                    moveY = e.beta * 0.2;
+                }
+            });
+
+            // 如果是在手机上，有时需要点击一下页面才能激活传感器权限
+            S.on("stagemousedown", () => {
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission();
+                }
+            });
+
+            Ticker.add(() => {
+                posX += moveX;
+                posY += moveY;
+
+                // 边界检测
+                if (posX < 60) posX = 60;
+                if (posX > 708) posX = 708;
+                if (posY < 60) posY = 60;
+                if (posY > 964) posY = 964;
+
+                stone.loc(posX, posY);
+
+                // 产生痕迹逻辑
+                if (Math.abs(moveX) > 0.5 || Math.abs(moveY) > 0.5) {
+                    new Poly({
+                        radius: rand(8, 12),
+                        sides: 5,
+                        pointSize: 0.3,
+                        color: "#d2b48c" 
+                    })
+                    .loc(posX, posY, trailLayer)
+                    .alp(0.3)
+                    .ord(-1);
+                    
+                    zenScore += 0.05;
+                    scoreLabel.text = "ZEN ENERGY: " + Math.floor(zenScore);
+                }
+            });
+
+            new Label("Click stage & Tilt to move").center().mov(0, -100).alp(0.6).animate({props:{alpha:0}, time:1.5, wait:2});
+        }
+    </script>
+</head>
+<body></body>
+</html>
