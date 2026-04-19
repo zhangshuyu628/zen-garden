@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Zen Garden - Kinetic Sand</title>
+    <title>Zen Garden - 10 Stones Fixed</title>
     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0" />
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
@@ -15,132 +15,134 @@
             scaling: FIT,
             width: 768,        
             height: 1024,
-            color: "#f4e4c1",
-            outerColor: "#000",
+            color: "#e8d8b5", 
+            outerColor: "#222",
             sensors: true,
             ready: ready
         });
 
         function ready() {
-            // 1. 初始化容器
             const trailLayer = new Container(768, 1024).addTo();
-            let zenScore = 0;
+            const rippleLayer = new Container(768, 1024).addTo();
+            const stoneLayer = new Container(768, 1024).addTo();
             
-            // 初始坐标变量
-            let posX = 384; 
-            let posY = 512;
             let moveX = 0;
             let moveY = 0;
-            let sensorsActive = false; // 标记传感器是否激活
+            let sensorsActive = false;
+            let zenScore = 0;
 
-            // 2. 禅石设计
-            const stone = new Poly({
-                radius: 60,
-                sides: [6, 8], 
-                pointSize: 0.6,
-                color: new RadialColor(["#999", "#444"], [0, 1])
-            }).loc(posX, posY).sha("#000", 8, 8, 15);
+            const stones = [];
+            const stoneColors = [["#888", "#333"], ["#999", "#444"], ["#777", "#222"], ["#666", "#111"]];
 
-            // 3. UI 标签
-            const scoreLabel = new Label({
-                text: "ZEN ENERGY: 0",
-                size: 32,
-                color: "#5d4037",
-                font: "verdana",
-                bold: true
-            }).pos(50, 50).alp(0.9);
-
-            // 4. 重置按钮
-            const resetBtn = new Button({
-                label: "CLEAR",
-                width: 140,
-                height: 60,
-                backgroundColor: "#8b4513",
-                cornerRadius: 30
-            }).pos(50, 140).tap(() => {
-                trailLayer.removeAllChildren();
-                zenScore = 0;
-                scoreLabel.text = "ZEN ENERGY: 0";
+            // --- 核心修复：手动实现映射逻辑，避免调用 map 报错 ---
+            loop(10, (i) => {
+                const radius = rand(30, 65);
+                const sides = rand(5, 10);
+                
+                const s = new Poly({
+                    radius: radius,
+                    sides: sides,
+                    pointSize: rand(0.3, 0.7),
+                    color: new RadialColor(stoneColors[rand(stoneColors.length-1)], [0, 1])
+                })
+                .loc(rand(100, 668), rand(100, 924), stoneLayer)
+                .sha("#000", 8, 8, 15);
+                
+                s.r = radius;
+                // 手动计算：半径越大速度越慢 (30-65 映射到 1.5-0.6)
+                s.baseSpeed = 1.5 - ((radius - 30) / (65 - 30)) * (1.5 - 0.6); 
+                stones.push(s);
             });
 
-            // --- 5. 核心修复：专门针对 iPhone 14/iPad Pro 的授权按钮 ---
+            // 点击涟漪
+            S.on("stagemousedown", (e) => {
+                if (!sensorsActive) return;
+                new Circle(5, "transparent", "#d2b48c", 2)
+                    .loc(e.stageX, e.stageY, rippleLayer)
+                    .animate({
+                        props: { scale: 12, alpha: 0 },
+                        time: 2,
+                        ease: "quadOut",
+                        call: (t) => { t.removeFrom(); }
+                    });
+                zenScore += 10;
+                updateScore();
+            });
+
+            // 授权按钮
             const authBtn = new Button({
-                label: "START ZEN",
-                width: 260,
+                label: "START ZEN GARDEN",
+                width: 350,
                 height: 100,
-                backgroundColor: "#d2691e",
-                rollBackgroundColor: "#8b4513",
-                cornerRadius: 50,
-                shadowColor: "rgba(0,0,0,0.3)",
-                shadowBlur: 20
+                backgroundColor: "#5d4037",
+                cornerRadius: 50
             }).center();
 
             authBtn.tap(() => {
-                // 显式请求 iOS 传感器权限
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(response => {
-                            if (response == 'granted') {
-                                sensorsActive = true;
-                                authBtn.animate({props:{alpha:0}, time:0.5, call:() => { authBtn.removeFrom(); }});
-                                window.addEventListener("deviceorientation", handleOrientation);
-                            } else {
-                                alert("Permission denied. Please refresh and allow access.");
-                            }
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            // 即使报错也尝试移除按钮并监听，兼容部分安卓
-                            authBtn.removeFrom();
-                            window.addEventListener("deviceorientation", handleOrientation);
-                        });
+                    DeviceOrientationEvent.requestPermission().then(res => {
+                        if (res == 'granted') startGarden();
+                    });
                 } else {
-                    // 非 iOS 设备直接启动
-                    sensorsActive = true;
-                    authBtn.removeFrom();
-                    window.addEventListener("deviceorientation", handleOrientation);
+                    startGarden();
                 }
             });
 
-            function handleOrientation(e) {
-                // 针对最新的 Chrome 模拟器和移动端标准
-                if (e.gamma !== null && e.beta !== null) {
-                    // 灵敏度调整为 0.3，针对 14 Pro 高频传感器优化
-                    moveX = e.gamma * 0.3; 
-                    moveY = e.beta * 0.3;
-                }
+            function startGarden() {
+                sensorsActive = true;
+                authBtn.removeFrom();
+                window.addEventListener("deviceorientation", (e) => {
+                    if (e.beta !== null) {
+                        moveX = e.gamma * 0.45;
+                        moveY = e.beta * 0.45;
+                    }
+                });
             }
 
-            // 6. 核心循环 (Ticker)
+            const scoreLabel = new Label({
+                text: "ZEN: 0",
+                size: 36,
+                color: "#5d4037",
+                bold: true
+            }).pos(50, 50);
+
+            function updateScore() {
+                scoreLabel.text = "ZEN: " + Math.floor(zenScore);
+            }
+
+            new Button({
+                label: "RAKE",
+                width: 120,
+                height: 50,
+                backgroundColor: "#8b4513"
+            }).pos(50, 110).tap(() => {
+                trailLayer.removeAllChildren();
+                zenScore = 0;
+                updateScore();
+            });
+
             Ticker.add(() => {
-                if (!sensorsActive) return; // 没授权前不动
+                if (!sensorsActive) return;
 
-                posX += moveX;
-                posY += moveY;
+                stones.forEach(stone => {
+                    stone.x += moveX * stone.baseSpeed;
+                    stone.y += moveY * stone.baseSpeed;
 
-                // 边缘检测
-                if (posX < 60) { posX = 60; moveX = 0; }
-                if (posX > 708) { posX = 708; moveX = 0; }
-                if (posY < 60) { posY = 60; moveY = 0; }
-                if (posY > 964) { posY = 964; moveY = 0; }
+                    if (stone.x < stone.r) stone.x = stone.r;
+                    if (stone.x > 768 - stone.r) stone.x = 768 - stone.r;
+                    if (stone.y < stone.r) stone.y = stone.r;
+                    if (stone.y > 1024 - stone.r) stone.y = 1024 - stone.r;
 
-                stone.loc(posX, posY);
-
-                // 产生痕迹
-                if (Math.abs(moveX) > 0.5 || Math.abs(moveY) > 0.5) {
-                    new Poly({
-                        radius: rand(10, 15),
-                        sides: 5,
-                        pointSize: 0.3,
-                        color: "#d2b48c" 
-                    })
-                    .loc(posX, posY, trailLayer)
-                    .alp(0.2)
-                    .ord(-1);
-                    
-                    zenScore += 0.05;
-                    scoreLabel.text = "ZEN ENERGY: " + Math.floor(zenScore);
-                }
+                    if (Math.abs(moveX) > 0.8 || Math.abs(moveY) > 0.8) {
+                        new Circle(stone.r * 0.7, "#d2b48c")
+                            .loc(stone.x, stone.y, trailLayer)
+                            .alp(0.08)
+                            .ord(-1);
+                        
+                        zenScore += 0.01;
+                    }
+                });
+                updateScore();
             });
         }
     </script>
