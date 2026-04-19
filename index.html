@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Zen Garden - 10 Stones Fixed</title>
+    <title>Zen Garden - 10 Stones Final</title>
     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0" />
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
@@ -11,6 +11,7 @@
     <script type="module">
         import zim from "https://zimjs.org/cdn/019/zim";
 
+     
         new Frame({
             scaling: FIT,
             width: 768,        
@@ -22,6 +23,7 @@
         });
 
         function ready() {
+           
             const trailLayer = new Container(768, 1024).addTo();
             const rippleLayer = new Container(768, 1024).addTo();
             const stoneLayer = new Container(768, 1024).addTo();
@@ -34,7 +36,7 @@
             const stones = [];
             const stoneColors = [["#888", "#333"], ["#999", "#444"], ["#777", "#222"], ["#666", "#111"]];
 
-            // --- 核心修复：手动实现映射逻辑，避免调用 map 报错 ---
+          
             loop(10, (i) => {
                 const radius = rand(30, 65);
                 const sides = rand(5, 10);
@@ -49,27 +51,11 @@
                 .sha("#000", 8, 8, 15);
                 
                 s.r = radius;
-                // 手动计算：半径越大速度越慢 (30-65 映射到 1.5-0.6)
+              
                 s.baseSpeed = 1.5 - ((radius - 30) / (65 - 30)) * (1.5 - 0.6); 
                 stones.push(s);
             });
 
-            // 点击涟漪
-            S.on("stagemousedown", (e) => {
-                if (!sensorsActive) return;
-                new Circle(5, "transparent", "#d2b48c", 2)
-                    .loc(e.stageX, e.stageY, rippleLayer)
-                    .animate({
-                        props: { scale: 12, alpha: 0 },
-                        time: 2,
-                        ease: "quadOut",
-                        call: (t) => { t.removeFrom(); }
-                    });
-                zenScore += 10;
-                updateScore();
-            });
-
-            // 授权按钮
             const authBtn = new Button({
                 label: "START ZEN GARDEN",
                 width: 350,
@@ -79,26 +65,37 @@
             }).center();
 
             authBtn.tap(() => {
+                
+                authBtn.removeFrom();
+                
+           
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission().then(res => {
-                        if (res == 'granted') startGarden();
-                    });
+                    DeviceOrientationEvent.requestPermission()
+                        .then(res => {
+                            if (res == 'granted') {
+                                startGarden();
+                            }
+                        })
+                        .catch(err => {
+                            console.log("Permission Error: ", err);
+                            startGarden(); 
+                        });
                 } else {
-                    startGarden();
+                    startGarden(); 
                 }
             });
 
             function startGarden() {
                 sensorsActive = true;
-                authBtn.removeFrom();
                 window.addEventListener("deviceorientation", (e) => {
-                    if (e.beta !== null) {
-                        moveX = e.gamma * 0.45;
-                        moveY = e.beta * 0.45;
+                    if (e.beta !== null && e.gamma !== null) {
+                        moveX = e.gamma * 0.5;
+                        moveY = e.beta * 0.5;
                     }
                 });
             }
 
+          
             const scoreLabel = new Label({
                 text: "ZEN: 0",
                 size: 36,
@@ -121,6 +118,7 @@
                 updateScore();
             });
 
+        
             Ticker.add(() => {
                 if (!sensorsActive) return;
 
@@ -128,11 +126,13 @@
                     stone.x += moveX * stone.baseSpeed;
                     stone.y += moveY * stone.baseSpeed;
 
+                 
                     if (stone.x < stone.r) stone.x = stone.r;
                     if (stone.x > 768 - stone.r) stone.x = 768 - stone.r;
                     if (stone.y < stone.r) stone.y = stone.r;
                     if (stone.y > 1024 - stone.r) stone.y = 1024 - stone.r;
 
+            
                     if (Math.abs(moveX) > 0.8 || Math.abs(moveY) > 0.8) {
                         new Circle(stone.r * 0.7, "#d2b48c")
                             .loc(stone.x, stone.y, trailLayer)
@@ -142,6 +142,21 @@
                         zenScore += 0.01;
                     }
                 });
+                updateScore();
+            });
+
+         
+            S.on("stagemousedown", (e) => {
+                if (!sensorsActive) return;
+                new Circle(5, "transparent", "#d2b48c", 2)
+                    .loc(e.stageX, e.stageY, rippleLayer)
+                    .animate({
+                        props: { scale: 12, alpha: 0 },
+                        time: 2,
+                        ease: "quadOut",
+                        call: (t) => { t.removeFrom(); }
+                    });
+                zenScore += 10;
                 updateScore();
             });
         }
